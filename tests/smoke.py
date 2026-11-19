@@ -5,7 +5,7 @@ import asyncio, os, sys, threading, functools, http.server, socketserver, pathli
 from playwright.async_api import async_playwright
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PW = os.environ.get('MARKING_PASSCODE', '')
-FIX = str(ROOT / 'tests' / 'fixtures' / 'BDB 11B CS tracker.xlsx')
+FIX = str(ROOT / 'tests' / 'fixtures' / 'BDB 10X CS tracker.xlsx')   # fabricated students only
 PORT = 8765
 IPAD = """delete window.showDirectoryPicker; Object.defineProperty(navigator, 'maxTouchPoints', {get: () => 5});
 Object.defineProperty(navigator, 'platform', {get: () => 'MacIntel'}); navigator.canShare = () => true; navigator.share = async d => { window.__shared = d.files.map(f => f.name); };"""
@@ -39,9 +39,9 @@ async def run(p, kind, ipad):
         async with pg.expect_file_chooser() as fc: await pg.click('.connect button')
         await (await fc.value).set_files(FIX); await pg.wait_for_timeout(1500)
         await pg.click('.tile >> text=Notebook check'); await pg.wait_for_timeout(800)
-        await pg.select_option('.clpick select', 'BDB 11B'); await pg.wait_for_timeout(800)
+        await pg.select_option('.clpick select', 'BDB 10X'); await pg.wait_for_timeout(800)
         await pg.click('.wnav .btn.go'); await pg.wait_for_timeout(800)
-        await pg.click('button:has-text("Open “BDB 11B CS tracker.xlsx”")'); await pg.wait_for_timeout(800)
+        await pg.click('button:has-text("Open “BDB 10X CS tracker.xlsx”")'); await pg.wait_for_timeout(800)
         await pg.click('.wnav .btn.go'); await pg.wait_for_selector('.nbcard')
         await pg.click('.nbseg button >> nth=0'); await pg.click('.nbtick input >> nth=0'); await pg.click('button:has-text("Copy & next")'); await pg.wait_for_timeout(900)
         await pg.click('text=📊 Class summary'); await pg.wait_for_selector('.sumwrap')
