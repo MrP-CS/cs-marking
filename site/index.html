@@ -19,29 +19,47 @@ button:disabled{opacity:.6}.err{color:#B42318;font-weight:700;min-height:1.4em;m
 <h1>Teacher marking</h1><p>GCSE Computer Science · for staff only. Type the teacher passcode from Teacher guide 1 in OneNote. This device remembers it.</p>
 <label for="pc">Teacher passcode</label><input id="pc" type="password" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go">
 <button id="go" type="submit">Open the marking screen</button><div class="err" id="err" role="alert"></div>
-<div class="ver">Version 2026-11-19 15:05 · works offline once opened</div></form>
+<div class="ver">Version 2026-11-19 22:30 · works offline once opened</div></form>
 <p id="wait" style="text-align:center">Opening the marking screen…</p>
 <script>
 (() => {
-const ITER = 310000, KEYK = 'opt-site-key', $ = id => document.getElementById(id);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-const b64 = a => btoa(String.fromCharCode(...new Uint8Array(a))), unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+/* Passcode lock. app.bin = "OPTM1" | salt(16) | iv(12) | AES-256-GCM(gzip(app)); key = PBKDF2-SHA256(passcode, salt, 310000).
+   After a correct passcode the device remembers a NON-EXTRACTABLE key in IndexedDB: the browser can use it to open the
+   app, but no script can read its bytes. (Earlier versions kept the raw key in localStorage; it is moved and deleted.)
+   Limits: anyone using this device's browser after it is unlocked can open the app; "Clear this computer" forgets it. */
+const ITER = 310000, OLDK = 'opt-site-key', $ = id => document.getElementById(id);
+const FILE = location.protocol === 'file:';
+if (!FILE && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)), same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 let BIN = null;
-async function bin(){ if (BIN) return BIN; const r = await fetch('app.bin'); if (!r.ok) throw Error('The marking screen could not be loaded (' + r.status + '). Open it once while online.'); const b = new Uint8Array(await r.arrayBuffer());
+async function bin(){ if (BIN) return BIN; let b;
+  const em = document.getElementById('appbin');   // the OneNote attachment carries the encrypted app inside the file
+  if (em) b = unb64(em.textContent.trim());
+  else { const r = await fetch('app.bin'); if (!r.ok) throw Error('The marking screen could not be loaded (' + r.status + '). Open it once while online.'); b = new Uint8Array(await r.arrayBuffer()); }
   if (String.fromCharCode(...b.slice(0, 5)) !== 'OPTM1') throw Error('The marking screen could not be loaded. Open it once while online.'); return BIN = {salt: b.slice(5, 21), iv: b.slice(21, 33), ct: b.slice(33)}; }
+const db = () => new Promise((res, rej) => { const r = indexedDB.open('opt-site', 1); r.onupgradeneeded = () => r.result.createObjectStore('k'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+async function keyGet(){ try { const d = await db(); return await new Promise(res => { const q = d.transaction('k').objectStore('k').get('key'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); }); } catch (e) { return null; } }
+async function keyPut(v){ try { const d = await db(); await new Promise((res, rej) => { const t = d.transaction('k', 'readwrite'); t.objectStore('k').put(v, 'key'); t.oncomplete = res; t.onerror = () => rej(t.error); }); return true; } catch (e) { return false; } }
+const toKey = raw => crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);   // false = cannot be exported
 async function derive(pw, salt){ const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
   return new Uint8Array(await crypto.subtle.deriveBits({name: 'PBKDF2', hash: 'SHA-256', salt, iterations: ITER}, base, 256)); }
-async function open(raw){ const B = await bin(), k = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
-  const gz = await crypto.subtle.decrypt({name: 'AES-GCM', iv: B.iv}, k, B.ct);
-  const html = await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
-  document.open(); document.write(html); document.close(); }
+async function decrypt(key){ const B = await bin(); const gz = await crypto.subtle.decrypt({name: 'AES-GCM', iv: B.iv}, key, B.ct);
+  return new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).text(); }
+const show = html => { document.open(); document.write(html); document.close(); };
 const form = $('optlock');
 form.onsubmit = async e => { e.preventDefault(); const pw = $('pc').value.trim(); if (!pw) return; $('go').disabled = true; $('err').textContent = '';
-  try { const B = await bin(), raw = await derive(pw, B.salt); try { await open(raw); try { localStorage.setItem(KEYK, JSON.stringify({salt: b64(B.salt), k: b64(raw)})); } catch (e3) {} return; }
-      catch (e2) { $('err').textContent = 'That passcode is not right. It is in Teacher guide 1 in OneNote.'; } }
+  try { const B = await bin(), raw = await derive(pw, B.salt), key = await toKey(raw); raw.fill(0);
+    let html; try { html = await decrypt(key); } catch (e2) { $('err').textContent = 'That passcode is not right. It is in Teacher guide 1 in OneNote.'; $('go').disabled = false; return; }
+    await keyPut({salt: B.salt, key}); show(html); return; }
   catch (e1) { $('err').textContent = e1.message; } $('go').disabled = false; };
-(async () => { let s = null; try { s = JSON.parse(localStorage.getItem(KEYK) || 'null'); } catch (e) {}
-  if (s) { try { const B = await bin(); if (b64(B.salt) === s.salt) { await open(unb64(s.k)); return; } } catch (e) {} }
+(async () => {
+  try { const B = await bin();
+    /* move an old raw key out of localStorage into a non-extractable key, then delete it */
+    let old = null; try { old = JSON.parse(localStorage.getItem(OLDK) || 'null'); } catch (e) {}
+    if (old) { try { localStorage.removeItem(OLDK); } catch (e) {} if (same(unb64(old.salt), B.salt)) { const k = await toKey(unb64(old.k)); await keyPut({salt: B.salt, key: k}); } }
+    const s = await keyGet();
+    if (s && s.key && same(new Uint8Array(s.salt), B.salt)) { try { show(await decrypt(s.key)); return; } catch (e) {} }
+  } catch (e) { $('err').textContent = e.message; }
   $('wait').hidden = true; form.hidden = false; $('pc').focus(); })();
 })();
 </script></body></html>

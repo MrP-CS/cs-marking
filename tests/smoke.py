@@ -18,7 +18,7 @@ def serve():
     s = socketserver.ThreadingTCPServer(('127.0.0.1', PORT), h); threading.Thread(target=s.serve_forever, daemon=True).start(); return s
 
 async def run(p, kind, ipad):
-    errs = []; b = await getattr(p, kind).launch()
+    errs = []; b = await getattr(p, kind).launch(executable_path=(os.environ.get('CHROME') or None) if kind == 'chromium' else None)   # CHROME: optional local browser
     opts = dict(p.devices['iPad Pro 11 landscape']) if ipad else {'viewport': {'width': 1366, 'height': 900}}
     if kind != 'webkit': opts.pop('is_mobile', None); opts.pop('default_browser_type', None)
     opts.pop('default_browser_type', None)
