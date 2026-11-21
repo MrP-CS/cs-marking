@@ -1,5 +1,5 @@
 /* offline: everything is kept on the device; new versions arrive when the device can reach this site */
-const V = 'cs-marking-2026-11-21_1016-0277c6d4b7', FILES = ["./", "index.html", "app.bin", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png", "icon-maskable.png"];
+const V = 'cs-marking-2026-11-21_1714-3b1f1020f0', FILES = ["./", "index.html", "app.bin", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png", "icon-maskable.png"];
 self.addEventListener('install', e => e.waitUntil((async () => { const c = await caches.open(V);
   for (const f of FILES) { const r = await fetch(f, {cache: 'reload'}); if (!r.ok) throw Error('missing ' + f);
     if (f === 'app.bin') { const b = new Uint8Array(await r.clone().arrayBuffer()); if (b.length < 1000 || String.fromCharCode(...b.slice(0, 5)) !== 'OPTM1') throw Error('bad app.bin'); }
