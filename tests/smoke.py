@@ -36,7 +36,7 @@ async def run(p, kind, ipad):
     await pg.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller", timeout=30000)
     await ctx.set_offline(True); await pg.reload(); await pg.wait_for_selector('.homehero', timeout=60000); print(kind, 'ipad' if ipad else 'pc', ': opens offline ✓')
     if ipad:
-        async with pg.expect_file_chooser() as fc: await pg.click('.connect button')
+        async with pg.expect_file_chooser() as fc: await pg.click('.connect .tfopen')
         await (await fc.value).set_files(FIX); await pg.wait_for_timeout(1500)
         await pg.click('.tile >> text=Notebook check'); await pg.wait_for_timeout(800)
         await pg.select_option('.clpick select', 'BDB 10X'); await pg.wait_for_timeout(800)
