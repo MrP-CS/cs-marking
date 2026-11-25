@@ -35,6 +35,12 @@ async def run(p, kind, ipad):
     await pg.reload(); await pg.wait_for_selector('.homehero', timeout=60000)          # remembered, now controlled by the service worker
     await pg.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller", timeout=30000)
     await ctx.set_offline(True); await pg.reload(); await pg.wait_for_selector('.homehero', timeout=60000); print(kind, 'ipad' if ipad else 'pc', ': opens offline ✓')
+    if not ipad:   # Force update: checks the site's version.json, clears the offline copy, reloads the newest
+        await ctx.set_offline(False); await pg.click('button:has-text("Force update")'); await pg.wait_for_selector('.uidlg', timeout=20000)
+        assert 'newest version' in await pg.inner_text('.uidlg'), 'Force update did not read version.json'
+        await pg.click('.uidlg .btn.go'); await pg.wait_for_url('**/?u=*', timeout=60000); await pg.wait_for_selector('.homehero', timeout=60000)
+        await pg.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller", timeout=30000)
+        await ctx.set_offline(True); await pg.reload(); await pg.wait_for_selector('.homehero', timeout=60000); print(kind, 'pc : Force update reloads and still works offline ✓')
     if ipad:
         async with pg.expect_file_chooser() as fc: await pg.click('.connect .tfopen')
         await (await fc.value).set_files(FIX); await pg.wait_for_timeout(1500)
